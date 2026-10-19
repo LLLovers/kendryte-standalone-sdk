@@ -37,6 +37,26 @@
 #include "syslog.h"
 #include "dump.h"
 
+#if HELIOS_ENABLE_HANG_DIAGNOSTICS
+extern void __attribute__((noreturn)) helios_record_misaligned_fault(
+    uintptr_t cause, uintptr_t epc, uintptr_t regs[32]);
+#endif
+
+/* With C instructions enabled a 32-bit instruction may start at epc % 4 == 2.
+ * Loading it with uint32_t* recursively faults inside the trap handler. */
+static uint32_t read_trapped_instruction(uintptr_t epc)
+{
+    const volatile uint16_t *halves = (const volatile uint16_t *)epc;
+    return (uint32_t)halves[0] | ((uint32_t)halves[1] << 16);
+}
+
+static uintptr_t trapped_register(const uintptr_t regs[32], unsigned index)
+{
+    if (index == 0) return 0;
+    /* crt.S stores the trap-frame SP; it adds the 512-byte frame on return. */
+    return regs[index] + (index == 2 ? 64 * sizeof(uintptr_t) : 0);
+}
+
 /**
  * @note       System call list
  *
@@ -539,7 +559,7 @@ handle_misaligned_load(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uintp
     }
     else
     {
-        uint32_t instruct = *(uint32_t *)epc;
+        uint32_t instruct = read_trapped_instruction(epc);
         uint8_t opcode = instruct&0x7F;
 
         dst = (instruct >> 7)&0x1F;
@@ -560,10 +580,10 @@ handle_misaligned_load(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uintp
         }
     }
 
-    if (offset >> 11)
-        offset = -((offset & 0x3FF) + 1);
+    if (offset & 0x800)
+        offset -= 0x1000;
 
-    addr = (uint64_t)((uint64_t)regs[src] + offset);
+    addr = (uintptr_t)(trapped_register(regs, src) + offset);
 
     for (int i = 0; i < len; ++i)
         data_load |= ((uint64_t)*((uint8_t *)addr + i)) << (8 * i);
@@ -588,15 +608,23 @@ handle_misaligned_load(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uintp
         }
     }
 
+    /* The BSP restores other registers through the saved frame SP. A load
+     * replacing SP cannot use that return path; retain the fatal fallback. */
+    if (!fpu && dst == 2) goto on_error;
     if (fpu)
         fregs[dst] = data_load;
-    else
+    else if (dst != 0)
+        /* A load into x0 still performs its access, then discards the result.
+         * The unused integer x0 frame slot now preserves FCSR. */
         regs[dst] = data_load;
 
-    LOGV(TAG, "misaligned load recovered at %08lx. len:%02d,addr:%08lx,reg:%02d,data:%016lx,signed:%1d,float:%1d", (uint64_t)epc, len, (uint64_t)addr, dst, data_load, !unsigned_, fpu);
+    // LOGV(TAG, "misaligned load recovered at %08lx. len:%02d,addr:%08lx,reg:%02d,data:%016lx,signed:%1d,float:%1d", (uint64_t)epc, len, (uint64_t)addr, dst, data_load, !unsigned_, fpu);
 
     return epc + (compressed ? 2 : 4);
 on_error:
+#if HELIOS_ENABLE_HANG_DIAGNOSTICS
+    helios_record_misaligned_fault(cause, epc, regs);
+#endif
     dump_core("misaligned load", cause, epc, regs, fregs);
     sys_exit(1337);
     return epc;
@@ -631,7 +659,7 @@ handle_misaligned_store(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uint
     }
     else
     {
-        uint32_t instruct = *(uint32_t *)epc;
+        uint32_t instruct = read_trapped_instruction(epc);
         uint8_t opcode = instruct&0x7F;
 
         len = (instruct >> 12)&7;
@@ -651,24 +679,29 @@ handle_misaligned_store(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uint
         }
     }
 
-    if (offset >> 11)
-        offset = -((offset & 0x3FF) + 1);
+    if (offset & 0x800)
+        offset -= 0x1000;
 
-    addr = (uint64_t)((uint64_t)regs[dst] + offset);
+    addr = (uintptr_t)(trapped_register(regs, dst) + offset);
 
 
     if (fpu)
         data_store = fregs[src];
     else
-        data_store = regs[src];
+        /* x0 is not saved (its slot holds FCSR), and regs[2] is the
+         * decremented frame SP rather than the interrupted SP. */
+        data_store = trapped_register(regs, src);
 
     for (int i = 0; i < len; ++i)
         *((uint8_t *)addr + i) = (data_store >> (i*8)) & 0xFF;
 
-    LOGV(TAG, "misaligned store recovered at %08lx. len:%02d,addr:%08lx,reg:%02d,data:%016lx,float:%1d", (uint64_t)epc, len, (uint64_t)addr, src, data_store, fpu);
+    // LOGV(TAG, "misaligned store recovered at %08lx. len:%02d,addr:%08lx,reg:%02d,data:%016lx,float:%1d", (uint64_t)epc, len, (uint64_t)addr, src, data_store, fpu);
 
     return epc + (compressed ? 2 : 4);
 on_error:
+#if HELIOS_ENABLE_HANG_DIAGNOSTICS
+    helios_record_misaligned_fault(cause, epc, regs);
+#endif
     dump_core("misaligned store", cause, epc, regs, fregs);
     sys_exit(1337);
     return epc;
@@ -708,4 +741,3 @@ size_t get_free_heap_size(void)
 {
     return (size_t)(&_heap_end[0] - _heap_cur);
 }
-

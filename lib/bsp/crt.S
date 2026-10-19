@@ -161,6 +161,12 @@ trap_entry:
   SREG x30, 30*REGBYTES(sp)
   SREG x31, 31*REGBYTES(sp)
 
+  # x0 needs no saved register slot. Keep FCSR here so interrupt handlers
+  # (including nested handlers) cannot leak rounding mode or exception flags
+  # into the interrupted floating-point calculation. Frame size stays 512.
+  frcsr t0
+  SREG t0, 0*REGBYTES(sp)
+
   SFREG f0, ( 0  + 32)*REGBYTES(sp)
   SFREG f1, ( 1  + 32)*REGBYTES(sp)
   SFREG f2, ( 2  + 32)*REGBYTES(sp)
@@ -206,6 +212,8 @@ trap_entry:
   jal handle_syscall
 .restore:
   csrw mepc, a0
+  LREG t0, 0*REGBYTES(sp)
+  fscsr t0
   LREG x1, 1*REGBYTES(sp)
   LREG x2, 2*REGBYTES(sp)
   LREG x3, 3*REGBYTES(sp)
