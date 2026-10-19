@@ -139,6 +139,18 @@ size_t uarths_send_data(const uint8_t *buf, size_t buf_len)
     return write;
 }
 
+size_t uarths_send_data_nonblocking(const uint8_t *buf, size_t buf_len)
+{
+    size_t write = 0;
+    while(write < buf_len)
+    {
+        if(uarths->txdata.full)
+            break;
+        uarths->txdata.data = buf[write++];
+    }
+    return write;
+}
+
 int uarths_puts(const char *s)
 {
     while (*s)
@@ -171,4 +183,3 @@ void uarths_config(uint32_t baud_rate, uarths_stopbit_t stopbit)
     uarths->div.div = div;
     uarths->txctrl.nstop = stopbit;
 }
-
