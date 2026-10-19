@@ -182,6 +182,13 @@ handle_irq_m_ext(uintptr_t cause, uintptr_t epc)
         uint64_t ie_flag = read_csr(mie);
         /* Get current IRQ num */
         uint32_t int_num = plic->targets.target[core_id].claim_complete;
+        /* Notification and claim are not atomic: a delayed notification may
+         * have no pending source by the time it is claimed. ID 0 means no
+         * interrupt, not a priority-zero interrupt. Never lower the threshold
+         * or enable nesting for it, and never index the callback table with
+         * an out-of-range ID. Leave the trap's interrupt state unchanged. */
+        if (int_num == 0 || int_num > PLIC_NUM_SOURCES)
+            return epc;
         /* Get primitive IRQ threshold */
         uint32_t int_threshold = plic->targets.target[core_id].priority_threshold;
         /* Set new IRQ threshold = current IRQ threshold */
