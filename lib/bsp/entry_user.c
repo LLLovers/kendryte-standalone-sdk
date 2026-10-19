@@ -42,6 +42,7 @@ void thread_entry(int core_id)
 
 void core_enable(int core_id)
 {
+    asm volatile ("fence rw,rw" ::: "memory");
     clint_ipi_send(core_id);
     atomic_set(&g_wake_up[core_id], 1);
 }
@@ -99,9 +100,10 @@ void _init_bsp(int core_id, int number_of_cores)
     }
     else
     {
+        thread_entry(core_id);
+        asm volatile ("fence rw,rw" ::: "memory");
         plic_init();
         sysctl_enable_irq();
-        thread_entry(core_id);
         if(core1_instance.callback == NULL)
             asm volatile ("wfi");
         else
