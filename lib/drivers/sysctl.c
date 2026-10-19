@@ -1044,7 +1044,7 @@ static uint32_t sysctl_pll_source_set_freq(sysctl_pll_t pll, sysctl_clock_source
 
     /* constants */
     const double vco_min = 3.5e+08;
-    const double vco_max = 1.75e+09;
+    const double vco_max = (pll == SYSCTL_PLL1) ? 8.0e+08 : 1.75e+09;
     const double ref_min = 1.36719e+07;
     const double ref_max = 1.75e+09;
     const int nr_min     = 1;
