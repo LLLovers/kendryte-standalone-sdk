@@ -282,10 +282,16 @@ extern "C" {
 #define kendryte_replbits_dword(dest, msk, src) \
     (kendryte_write_dword(dest, (kendryte_read_dword(dest) & ~(msk)) | ((src) & (msk))))
 
+#if !defined(HELIOS_ENABLE_DIAGNOSTIC_LOGGING) || HELIOS_ENABLE_DIAGNOSTIC_LOGGING
+#define KENDRYTE_ASSERT_PRINT(...) printf(__VA_ARGS__)
+#else
+#define KENDRYTE_ASSERT_PRINT(...) ((void)0)
+#endif
+
 #define configASSERT(x)                                 \
     if ((x) == 0)                                       \
     {                                                   \
-        printf("(%s:%d) %s\r\n", __FILE__, __LINE__, #x); \
+        KENDRYTE_ASSERT_PRINT("(%s:%d) %s\r\n", __FILE__, __LINE__, #x); \
         for (;;)                                        \
             ;                                           \
     }
