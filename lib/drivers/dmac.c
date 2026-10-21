@@ -91,7 +91,8 @@ void dmac_channel_enable(dmac_channel_number_t channel_num)
 {
     dmac_chen_u_t chen;
 
-    chen.data = readq(&dmac->chen);
+    /* CH_EN is shared: write-enable only the selected channel. */
+    chen.data = 0;
 
     switch (channel_num) {
     case DMAC_CHANNEL0:
@@ -122,6 +123,8 @@ void dmac_channel_enable(dmac_channel_number_t channel_num)
         break;
     }
 
+    /* Publish buffer writes and channel configuration before starting DMA. */
+    __asm__ volatile("fence iorw,iorw" ::: "memory");
     writeq(chen.data, &dmac->chen);
 }
 
@@ -129,7 +132,8 @@ void dmac_channel_disable(dmac_channel_number_t channel_num)
 {
     dmac_chen_u_t chen;
 
-    chen.data = readq(&dmac->chen);
+    /* Do not replay another channel's enable/suspend/abort write enables. */
+    chen.data = 0;
 
     switch (channel_num)
     {
@@ -258,10 +262,12 @@ static void dmac_enable_channel_interrupt(dmac_channel_number_t channel_num)
 {
     writeq(0xffffffff, &dmac->channel[channel_num].intclear);
     writeq(0x2, &dmac->channel[channel_num].intstatus_en);
+    writeq(0x2, &dmac->channel[channel_num].intsignal_en);
 }
 
 void dmac_disable_channel_interrupt(dmac_channel_number_t channel_num)
 {
+    writeq(0, &dmac->channel[channel_num].intsignal_en);
     writeq(0, &dmac->channel[channel_num].intstatus_en);
 }
 
@@ -760,8 +766,9 @@ static int dmac_irq_callback(void *ctx)
 {
     dmac_context_t *v_dmac_context = (dmac_context_t *)(ctx);
     dmac_channel_number_t v_dmac_channel = v_dmac_context->dmac_channel;
+    int transfer_done = dmac_is_done(v_dmac_channel);
     dmac_chanel_interrupt_clear(v_dmac_channel);
-    if(v_dmac_context->callback != NULL)
+    if(transfer_done && v_dmac_context->callback != NULL)
         v_dmac_context->callback(v_dmac_context->ctx);
 
     return 0;
