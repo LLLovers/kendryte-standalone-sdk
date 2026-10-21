@@ -71,6 +71,8 @@ void _init_bsp(int core_id, int number_of_cores)
 
     if (core_id == 0)
     {
+        /* Relocate initialized data before touching BSS or calling C++. */
+        init_lma();
         /* Initialize bss data to 0 */
         init_bss();
         /* Init UART */

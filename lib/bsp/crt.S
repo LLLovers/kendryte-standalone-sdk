@@ -19,7 +19,6 @@
 # define LFREG flw
 # define SFREG fsw
 # define REGBYTES 8
-# define STKSHIFT 15
 
 
 .section .text.start, "ax", @progbits
@@ -113,13 +112,16 @@ _start:
   .option norelax
    la gp, __global_pointer$
   .option pop
-  la  tp, _end + 63
-  and tp, tp, -64
   csrr a0, mhartid
-
-  add sp, a0, 1
-  sll sp, sp, STKSHIFT
-  add sp, sp, tp
+  bnez a0, .Lcore1_stack
+  la tp, _tp0
+  la sp, _sp0
+  j .Lstack_ready
+.Lcore1_stack:
+  la tp, _tp1
+  la sp, _sp1
+.Lstack_ready:
+  li a1, 2
 
   j _init_bsp
 

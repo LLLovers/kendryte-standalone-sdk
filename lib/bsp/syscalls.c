@@ -37,11 +37,6 @@
 #include "syslog.h"
 #include "dump.h"
 
-#if HELIOS_ENABLE_HANG_DIAGNOSTICS
-extern void __attribute__((noreturn)) helios_record_misaligned_fault(
-    uintptr_t cause, uintptr_t epc, uintptr_t regs[32]);
-#endif
-
 /* With C instructions enabled a 32-bit instruction may start at epc % 4 == 2.
  * Loading it with uint32_t* recursively faults inside the trap handler. */
 static uint32_t read_trapped_instruction(uintptr_t epc)
@@ -622,8 +617,8 @@ handle_misaligned_load(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uintp
 
     return epc + (compressed ? 2 : 4);
 on_error:
-#if HELIOS_ENABLE_HANG_DIAGNOSTICS
-    helios_record_misaligned_fault(cause, epc, regs);
+#if K210_ENABLE_FAULT_HOOK
+    k210_record_misaligned_fault(cause, epc, regs);
 #endif
     dump_core("misaligned load", cause, epc, regs, fregs);
     sys_exit(1337);
@@ -699,8 +694,8 @@ handle_misaligned_store(uintptr_t cause, uintptr_t epc, uintptr_t regs[32], uint
 
     return epc + (compressed ? 2 : 4);
 on_error:
-#if HELIOS_ENABLE_HANG_DIAGNOSTICS
-    helios_record_misaligned_fault(cause, epc, regs);
+#if K210_ENABLE_FAULT_HOOK
+    k210_record_misaligned_fault(cause, epc, regs);
 #endif
     dump_core("misaligned store", cause, epc, regs, fregs);
     sys_exit(1337);

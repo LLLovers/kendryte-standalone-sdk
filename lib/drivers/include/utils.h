@@ -282,7 +282,7 @@ extern "C" {
 #define kendryte_replbits_dword(dest, msk, src) \
     (kendryte_write_dword(dest, (kendryte_read_dword(dest) & ~(msk)) | ((src) & (msk))))
 
-#if !defined(HELIOS_ENABLE_DIAGNOSTIC_LOGGING) || HELIOS_ENABLE_DIAGNOSTIC_LOGGING
+#if !defined(K210_ENABLE_DIAGNOSTIC_LOGGING) || K210_ENABLE_DIAGNOSTIC_LOGGING
 #define KENDRYTE_ASSERT_PRINT(...) printf(__VA_ARGS__)
 #else
 #define KENDRYTE_ASSERT_PRINT(...) ((void)0)

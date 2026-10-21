@@ -17,6 +17,7 @@
 #define _BSP_ENTRY_H
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 
 #ifdef __cplusplus
@@ -35,14 +36,13 @@ int register_core1(core_function func, void *ctx);
 
 static inline void init_lma(void)
 {
-    extern unsigned int _data_lma;
-    extern unsigned int _data;
-    extern unsigned int _edata;
-    unsigned int *src, *dst;
-
-    src = &_data_lma;
-    dst = &_data;
-    while (dst < &_edata)
+    extern unsigned char _data_lma[], _data[], _edata[];
+    const volatile unsigned char *src = _data_lma;
+    volatile unsigned char *dst = _data;
+    if ((uintptr_t)_data_lma == (uintptr_t)_data)
+        return;
+    /* Volatile bytes also support unaligned/non-word-sized custom sections. */
+    while (dst < _edata)
         *dst++ = *src++;
 }
 
@@ -70,7 +70,7 @@ static inline void init_tls(void)
 
     size_t tbss_size = &_tbss_end - &_tdata_end;
 
-    memset(thread_pointer + tdata_size, 0, tbss_size);
+    memset((char *)thread_pointer + tdata_size, 0, tbss_size);
 }
 
 #ifdef __cplusplus

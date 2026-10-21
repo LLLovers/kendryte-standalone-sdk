@@ -26,6 +26,11 @@
 extern "C" {
 #endif
 
+/* Required application callback when K210_ENABLE_FAULT_HOOK is enabled.
+ * It must not return; ordinary recoverable unaligned accesses do not call it. */
+void __attribute__((noreturn)) k210_record_misaligned_fault(
+    uintptr_t cause, uintptr_t epc, uintptr_t regs[32]);
+
 /**
  * @brief       Definitions for syscall putchar function
  *

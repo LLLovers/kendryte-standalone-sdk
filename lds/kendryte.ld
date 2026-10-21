@@ -17,8 +17,6 @@ MEMORY
   ram_nocache (wxa!ri) : ORIGIN = 0x40000000, LENGTH = (6 * 1024 * 1024)
 }
 
-PROVIDE( _rom_start  = ORIGIN(rom) );
-PROVIDE( _rom_end    = ORIGIN(rom) + LENGTH(rom) );
 PROVIDE( _ram_start  = ORIGIN(ram) );
 PROVIDE( _ram_end    = ORIGIN(ram) + LENGTH(ram) );
 PROVIDE( _io_start   = 0x40000000 );
@@ -249,3 +247,9 @@ SECTIONS
   PROVIDE( _heap_end = _ram_end );
 }
 
+
+ASSERT((_sp0 & 15) == 0 && (_sp1 & 15) == 0, "K210 stacks must be 16-byte aligned")
+ASSERT(_stack_size > 0 && (_stack_size & 63) == 0, "K210 stack size must be a positive multiple of 64")
+ASSERT(_tp0 >= _end && _tp1 >= _sp0, "K210 stacks overlap program or each other")
+ASSERT(_heap_start >= _sp1 && _heap_start <= _heap_end, "K210 heap/stacks exceed RAM")
+ASSERT(_heap_end <= ORIGIN(ram) + LENGTH(ram), "K210 heap exceeds RAM")
